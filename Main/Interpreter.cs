@@ -27,12 +27,12 @@ namespace SimpScript
             string[] parts = line.Split(' ', 2);
             string command = parts[0];
 
-            if (command == "print")
+            if (command == "say")
             {
                 // Evaluate the expression after "print" and output the result.
                 Console.WriteLine(Evaluate(parts[1]));
             }
-            else if (command == "let")
+            else if (command == "set")
             {
                 // For variable assignment, the format is: let x = expression
                 // We split on " = " (with spaces) for simplicity.
