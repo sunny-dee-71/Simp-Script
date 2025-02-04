@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
-using SimpScript;
 
 namespace SimpScript
 {
@@ -10,33 +10,25 @@ namespace SimpScript
         {
             if (args.Length == 0)
             {
-                Console.WriteLine("Please provide the path to a .ss file.");
+                Console.WriteLine("Please provide a .ss file.");
                 return;
             }
 
             string filePath = args[0];
 
-            // Check if file exists
             if (!File.Exists(filePath))
             {
                 Console.WriteLine("File not found: " + filePath);
                 return;
             }
 
-            string code = File.ReadAllText(filePath); // Read file content
+            string[] lines = File.ReadAllLines(filePath);
 
-            Lexer lexer = new(code);
-            List<Token> tokens = lexer.Tokenize();
-
-            Parser parser = new(tokens);
-            AstNode ast = parser.Parse();
-
-            // Now interpret the AST
             Interpreter interpreter = new();
-            interpreter.Interpret(ast);
+            interpreter.Run(lines);
 
-            Console.WriteLine("Execution complete!");
-            Console.ReadKey(); // Add this line to keep the console open until the user presses a key
+            Console.WriteLine("\nExecution complete! Press Enter to exit.");
+            Console.ReadLine();  // **Wait for user input before closing**
         }
     }
 }
