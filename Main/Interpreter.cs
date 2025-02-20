@@ -1,122 +1,177 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
+using System.Linq;
 
 namespace SimpScript
 {
     public class Interpreter
     {
-        // Stores variables as string values.
         private Dictionary<string, string> variables = new Dictionary<string, string>();
 
-        // Run the interpreter with an array of code lines.
         public void Run(string[] lines)
         {
-            foreach (string line in lines)
+            for (int i = 0; i < lines.Length; i++)
             {
-                Execute(line.Trim());
+                i = Execute(lines, i);
             }
         }
 
-        // Execute a single line.
-        private void Execute(string line)
+        private int Execute(string[] lines, int index)
         {
-            if (string.IsNullOrWhiteSpace(line)) return;
+            string line = lines[index].Trim();
+            if (string.IsNullOrWhiteSpace(line) || line == "end") return index;
 
-            // Split the line into command and the rest of the expression.
             string[] parts = line.Split(' ', 2);
             string command = parts[0];
 
             if (command == "say")
             {
-                // Evaluate the expression after "print" and output the result.
                 Console.WriteLine(Evaluate(parts[1]));
             }
             else if (command == "set")
             {
-                // For variable assignment, the format is: let x = expression
-                // We split on " = " (with spaces) for simplicity.
                 string[] assignment = parts[1].Split(new string[] { " = " }, StringSplitOptions.None);
                 if (assignment.Length != 2)
                 {
                     Console.WriteLine("Error: Invalid assignment.");
-                    return;
+                    return index;
                 }
                 string varName = assignment[0].Trim();
                 string expr = assignment[1].Trim();
 
-                // Check if the assignment is for input, e.g., input "Enter your name"
                 if (expr.StartsWith("input"))
                 {
-                    // Remove the "input" keyword
-                    string prompt = expr.Substring("input".Length).Trim();
-                    // Remove quotes from the prompt if they exist
-                    prompt = prompt.Trim('"');
+                    string prompt = expr.Substring("input".Length).Trim().Trim('"');
                     Console.Write(prompt + ": ");
-                    string userInput = Console.ReadLine();
-                    variables[varName] = userInput;
+                    variables[varName] = Console.ReadLine();
                 }
                 else
                 {
                     variables[varName] = Evaluate(expr);
                 }
             }
+            else if (command == "if")
+            {
+                string condition = parts[1].Trim();
+                bool conditionMet = EvaluateCondition(condition);
+                if (!conditionMet)
+                {
+                    index = SkipBlock(lines, index);
+                }
+            }
+            else if (command == "repeat")
+            {
+                string loopParams = parts[1].Trim();
+                return HandleRepeat(lines, index, loopParams);
+            }
             else
             {
                 Console.WriteLine("Error: Unknown command " + command);
             }
+            return index;
         }
 
-        // Evaluate an expression (supports '+' operator for addition or concatenation).
+        private bool EvaluateCondition(string condition)
+        {
+            string[] operators = new string[] { "==", "!=", "<", "<=", ">", ">=" };
+            string op = operators.FirstOrDefault(condition.Contains);
+            if (op == null) return false;
+
+            string[] parts = condition.Split(new string[] { op }, StringSplitOptions.None);
+            if (parts.Length != 2) return false;
+
+            string left = Evaluate(parts[0].Trim());
+            string right = Evaluate(parts[1].Trim());
+
+            if (int.TryParse(left, out int leftNum) && int.TryParse(right, out int rightNum))
+            {
+                return op switch
+                {
+                    "==" => leftNum == rightNum,
+                    "!=" => leftNum != rightNum,
+                    "<" => leftNum < rightNum,
+                    "<=" => leftNum <= rightNum,
+                    ">" => leftNum > rightNum,
+                    ">=" => leftNum >= rightNum,
+                    _ => false,
+                };
+            }
+            return false;
+        }
+
+        private int HandleRepeat(string[] lines, int index, string loopParams)
+        {
+            int startIndex = index;
+            List<string> block = ExtractBlock(lines, ref index);
+
+            if (loopParams.Contains("times"))
+            {
+                int times = int.Parse(Evaluate(loopParams.Replace("times", "").Trim()));
+                for (int i = 0; i < times; i++) Run(block.ToArray());
+            }
+            else if (loopParams.StartsWith("while"))
+            {
+                string condition = loopParams.Replace("while", "").Trim();
+                while (EvaluateCondition(condition)) Run(block.ToArray());
+            }
+            else if (loopParams.Contains("from") && loopParams.Contains("to"))
+            {
+                string[] parts = loopParams.Split(new string[] { "from", "to" }, StringSplitOptions.None);
+                string varName = parts[0].Trim();
+                int start = int.Parse(Evaluate(parts[1].Trim()));
+                int end = int.Parse(Evaluate(parts[2].Trim()));
+                for (variables[varName] = start.ToString(); int.Parse(variables[varName]) <= end; variables[varName] = (int.Parse(variables[varName]) + 1).ToString())
+                {
+                    Run(block.ToArray());
+                }
+            }
+            return index;
+        }
+
+        private List<string> ExtractBlock(string[] lines, ref int index)
+        {
+            List<string> block = new List<string>();
+            index++;
+            while (index < lines.Length && !lines[index].Trim().Equals("end", StringComparison.OrdinalIgnoreCase))
+            {
+                block.Add(lines[index]);
+                index++;
+            }
+            return block;
+        }
+
+        private int SkipBlock(string[] lines, int index)
+        {
+            index++;
+            while (index < lines.Length && !lines[index].Trim().Equals("end", StringComparison.OrdinalIgnoreCase))
+            {
+                index++;
+            }
+            return index;
+        }
+
         private string Evaluate(string expression)
         {
-            // First, replace variable names with their values.
             foreach (var variable in variables)
             {
-                // Use a simple replacement; in a robust solution, you'd parse tokens
                 expression = expression.Replace(variable.Key, variable.Value);
             }
 
-            // If the expression contains the '+' operator, we will split and process each part.
             if (expression.Contains("+"))
             {
-                // Split on '+' and trim each part.
                 string[] parts = expression.Split('+').Select(p => p.Trim()).ToArray();
                 List<object> evaluatedParts = new List<object>();
-
                 foreach (var part in parts)
                 {
-                    // If the part is numeric, treat it as an int.
                     if (int.TryParse(part, out int number))
-                    {
                         evaluatedParts.Add(number);
-                    }
-                    // If the part is a quoted string, remove the quotes.
                     else if (part.StartsWith("\"") && part.EndsWith("\""))
-                    {
                         evaluatedParts.Add(part.Trim('"'));
-                    }
                     else
-                    {
-                        // Otherwise, leave it as a string.
                         evaluatedParts.Add(part);
-                    }
                 }
-
-                // If every part is an int, sum them.
-                if (evaluatedParts.All(p => p is int))
-                {
-                    int sum = evaluatedParts.Cast<int>().Sum();
-                    return sum.ToString();
-                }
-                else
-                {
-                    // Otherwise, concatenate all parts as strings.
-                    return string.Join("", evaluatedParts.Select(p => p.ToString()));
-                }
+                return evaluatedParts.All(p => p is int) ? evaluatedParts.Cast<int>().Sum().ToString() : string.Join("", evaluatedParts);
             }
-
-            // If there's no '+' operator, simply remove surrounding quotes (if any) and return.
             return expression.Trim('"');
         }
     }
